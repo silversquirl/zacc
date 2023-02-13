@@ -3,19 +3,40 @@ const std = @import("std");
 pub const gen = @import("gen.zig");
 pub const exec = @import("exec.zig");
 
+pub fn ParseTables(
+    comptime Term: type,
+    comptime NonTerm: type,
+) type {
+    return struct {
+        action: []const ActionMap,
+        goto: []const GotoMap,
+
+        pub const Terminal = Term;
+        pub const NonTerminal = NonTerm;
+
+        pub const ActionMap = std.enums.EnumArray(Terminal, Action);
+        pub const GotoMap = std.enums.EnumArray(NonTerminal, u32);
+
+        pub const Action = union(enum) {
+            err,
+            done,
+            shift: u32,
+            reduce: struct { usize, NonTerminal },
+        };
+    };
+}
+
 pub fn Parser(comptime Token: type, comptime grammar: anytype) type {
     return struct {
         pub const Terminal = Token;
         pub const NonTerminal = std.meta.FieldEnum(@TypeOf(grammar));
 
-        const Gen = gen.Generator(Terminal, NonTerminal);
-        const tables = Gen.generate(grammar);
-
-        const Exec = exec.Executor(Terminal, NonTerminal);
+        const tables = gen.Generator(Terminal, NonTerminal).generate(grammar);
+        const Exec = exec.Executor(Terminal, NonTerminal, tables);
         pub const ParseTree = Exec.ParseTree;
 
         pub fn parse(allocator: std.mem.Allocator, tokenizer: anytype) !ParseTree {
-            return Exec.parseToTree(allocator, tables, tokenizer);
+            return Exec.parseToTree(allocator, tokenizer);
         }
     };
 }

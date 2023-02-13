@@ -1,17 +1,20 @@
 const std = @import("std");
-const common = @import("common.zig");
+const zlr = @import("zlr.zig");
 
 pub fn Executor(
     comptime Terminal: type,
     comptime NonTerminal: type,
+    comptime tables: zlr.ParseTables(Terminal, NonTerminal),
 ) type {
     return struct {
-        pub fn parseToTree(
-            allocator: std.mem.Allocator,
-            comptime tables: Tables,
+        pub fn parseWithContext(
+            allocator: std.mem.Allocator, // TODO: use recursion instead?
             tokenizer: anytype,
-        ) !ParseTree {
-            var stack = std.ArrayList(struct { u32, ParseTree }).init(allocator);
+            context: anytype,
+        ) !@TypeOf(context).Result {
+            const Result = @TypeOf(context).Result;
+
+            var stack = std.ArrayList(struct { u32, Result }).init(allocator);
             defer {
                 for (stack.items[1..]) |entry| {
                     entry[1].deinit(allocator);
@@ -29,31 +32,30 @@ pub fn Executor(
                     .shift => |next_state| {
                         try stack.append(.{
                             next_state,
-                            .{ .t = tok },
+                            try context.terminal(tok),
                         });
                         tok = tokenizer.next(); // TODO: allow errors
                     },
 
-                    .reduce => |red| {
-                        const children = try allocator.alloc(ParseTree, red[0]);
-                        errdefer allocator.free(children);
-                        const pop_idx = stack.items.len - children.len;
+                    .reduce => |reduce| {
+                        const count = reduce[0];
+                        const nt = reduce[1];
+
+                        var children: [max_pop]Result = undefined;
+                        const pop_idx = stack.items.len - count;
                         for (stack.items[pop_idx..]) |entry, j| {
                             children[j] = entry[1];
                         }
                         stack.shrinkRetainingCapacity(pop_idx);
 
                         const prior_state = stack.getLast()[0];
-                        const next_state = tables.goto[prior_state].get(red[1]);
+                        const next_state = tables.goto[prior_state].get(nt);
                         if (next_state == std.math.maxInt(u32)) {
                             return error.ParseSyntaxError;
                         }
                         try stack.append(.{
                             next_state,
-                            .{ .nt = .{
-                                .nt = red[1],
-                                .children = children,
-                            } },
+                            try context.nonTerminal(nt, @as([]const Result, children[0..count])),
                         });
                     },
 
@@ -63,7 +65,48 @@ pub fn Executor(
             }
         }
 
-        pub const Tables = common.ParseTables(Terminal, NonTerminal);
+        const max_pop = blk: {
+            var max: u32 = 0;
+            for (tables.action) |action_map| {
+                for (action_map.values) |action| {
+                    if (action == .reduce) {
+                        max = @max(max, action.reduce[0]);
+                    }
+                }
+            }
+            break :blk max;
+        };
+
+        pub fn parseToTree(
+            allocator: std.mem.Allocator,
+            tokenizer: anytype,
+        ) !ParseTree {
+            return parseWithContext(
+                allocator,
+                tokenizer,
+                ParseTreeContext{ .allocator = allocator },
+            );
+        }
+        const ParseTreeContext = struct {
+            allocator: std.mem.Allocator,
+
+            pub const Result = ParseTree;
+
+            pub fn nonTerminal(
+                self: ParseTreeContext,
+                nt: NonTerminal,
+                children: []const ParseTree,
+            ) !ParseTree {
+                return .{ .nt = .{
+                    .nt = nt,
+                    .children = try self.allocator.dupe(ParseTree, children),
+                } };
+            }
+            pub fn terminal(_: ParseTreeContext, t: Terminal) !ParseTree {
+                return .{ .t = t };
+            }
+        };
+
         pub const ParseTree = union(enum) {
             nt: struct {
                 nt: NonTerminal,
@@ -71,6 +114,7 @@ pub fn Executor(
             },
             t: Terminal,
 
+            /// Free the parse tree.
             pub fn deinit(self: ParseTree, allocator: std.mem.Allocator) void {
                 switch (self) {
                     .nt => |nt| {
@@ -83,6 +127,7 @@ pub fn Executor(
                 }
             }
 
+            /// Compare two parse trees. Useful for tests.
             pub fn eql(self: ParseTree, other: ParseTree) bool {
                 if (@as(std.meta.Tag(ParseTree), self) != other) return false;
                 switch (self) {
@@ -98,6 +143,7 @@ pub fn Executor(
                 }
             }
 
+            /// Format the parse tree as a Graphviz DOT graph. Useful for debugging.
             pub fn fmtDot(self: ParseTree) std.fmt.Formatter(formatDot) {
                 return .{ .data = self };
             }

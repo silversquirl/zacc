@@ -1,5 +1,5 @@
 const std = @import("std");
-const common = @import("common.zig");
+const zlr = @import("zlr.zig");
 
 pub fn Generator(
     comptime Terminal: type,
@@ -20,7 +20,7 @@ pub fn Generator(
 
         const Self = @This();
 
-        pub const Tables = common.ParseTables(Terminal, NonTerminal);
+        pub const Tables = zlr.ParseTables(Terminal, NonTerminal);
         pub const Rules = std.enums.EnumFieldStruct(NonTerminal, []const []const Symbol, null);
         const RulesArray = std.enums.EnumArray(NonTerminal, []const []const Symbol);
         pub const Symbol = union(enum) {
