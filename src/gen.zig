@@ -7,9 +7,9 @@ pub fn Generator(
 ) type {
     return struct {
         pub fn generate(comptime rules: Rules) Tables {
-            comptime {
-                @setEvalBranchQuota(1000 * std.meta.fields(Rules).len);
+            @setEvalBranchQuota(2000 * std.meta.fields(Rules).len);
 
+            comptime {
                 var gen = Self{ .rules = RulesArray.init(rules) };
                 gen.fillFirst();
                 gen.fillFollow();
@@ -142,7 +142,7 @@ pub fn Generator(
                                     done = false;
                                 },
                                 .nt => |nt| {
-                                    const other = self.follow.get(nt);
+                                    const other = self.first.get(nt);
                                     if (!set.supersetOf(other)) {
                                         set.setUnion(other);
                                         done = false;
@@ -206,24 +206,22 @@ pub fn Generator(
         }
 
         fn makeItemSet(self: Self, comptime seed_iset: ItemSet, comptime seed_locus: Symbol) ItemSet {
-            comptime {
-                var iset = ItemSet{};
+            var iset = ItemSet{};
 
-                for (seed_iset.items) |item| {
-                    const rhs = self.rules.get(item.nt)[item.rule];
-                    if (item.index >= rhs.len) continue;
-                    const locus = rhs[item.index];
-                    if (std.meta.eql(locus, seed_locus)) {
-                        var new_item = item;
-                        new_item.index += 1;
-                        iset.add(new_item);
-                    }
+            for (seed_iset.items) |item| {
+                const rhs = self.rules.get(item.nt)[item.rule];
+                if (item.index >= rhs.len) continue;
+                const locus = rhs[item.index];
+                if (std.meta.eql(locus, seed_locus)) {
+                    var new_item = item;
+                    new_item.index += 1;
+                    iset.add(new_item);
                 }
-
-                self.closeItemSet(&iset);
-
-                return iset;
             }
+
+            self.closeItemSet(&iset);
+
+            return iset;
         }
 
         fn closeItemSet(self: Self, comptime iset: *ItemSet) void {
@@ -324,7 +322,7 @@ pub fn Generator(
     };
 }
 
-test {
+test "gen - simple expression" {
     const Gen = Generator(enum {
         int,
         ident,
@@ -338,7 +336,6 @@ test {
         value,
     });
 
-    @setEvalBranchQuota(4000);
     const tables = Gen.generate(.{
         // start = sum END
         .start = &.{
@@ -372,4 +369,31 @@ test {
     //     .action = .{
     //     },
     // };
+}
+
+test "gen - non-separated list" {
+    const Gen = Generator(
+        enum { x, sentinel },
+        enum { start, seq, atom },
+    );
+
+    std.debug.print("\n", .{});
+    const tables = Gen.generate(.{
+        // start = seq $
+        .start = &.{
+            &.{ .{ .nt = .seq }, .{ .t = .sentinel } },
+        },
+        // seq = seq atom | atom
+        .seq = &.{
+            &.{ .{ .nt = .seq }, .{ .nt = .atom } },
+            &.{.{ .nt = .atom }},
+        },
+        // atom = .x
+        .atom = &.{
+            &.{.{ .t = .x }},
+        },
+    });
+
+    try std.testing.expectEqual(@as(usize, 6), tables.action.len);
+    // TODO: check actual table contents
 }

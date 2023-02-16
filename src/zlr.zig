@@ -2,6 +2,7 @@ const std = @import("std");
 
 pub const gen = @import("gen.zig");
 pub const exec = @import("exec.zig");
+pub const parse = @import("parse.zig");
 
 pub fn ParseTables(
     comptime Term: type,
@@ -26,26 +27,43 @@ pub fn ParseTables(
     };
 }
 
-pub fn Parser(comptime Token: type, comptime grammar: anytype) type {
-    return struct {
-        pub const Terminal = Token;
-        pub const NonTerminal = std.meta.FieldEnum(@TypeOf(grammar));
+/// Nice little struct wrapping up all the important bits from gen.Generator and exec.Executor
+pub fn Parser(comptime Term: type, comptime grammar: anytype) type {
+    const NonTerm = std.meta.FieldEnum(@TypeOf(grammar));
+    const tables = gen.Generator(Term, NonTerm).generate(grammar);
+    const Exec = exec.Executor(Term, NonTerm, tables);
 
-        const tables = gen.Generator(Terminal, NonTerminal).generate(grammar);
-        const Exec = exec.Executor(Terminal, NonTerminal, tables);
+    return struct {
+        pub const Terminal = Term;
+        pub const NonTerminal = NonTerm;
+
         pub const ParseTree = Exec.ParseTree;
 
-        pub fn parse(allocator: std.mem.Allocator, tokenizer: anytype) !ParseTree {
-            return Exec.parseToTree(allocator, tokenizer);
+        pub const parseToTree = Exec.parseToTree;
+        pub const parseWithContext = Exec.parseWithContext;
+    };
+}
+
+pub fn TestTokenizer(comptime Token: type) type {
+    return struct {
+        toks: [:.sentinel]const Token,
+        idx: usize = 0,
+
+        pub fn next(self: *@This()) Token {
+            const t = self.toks[self.idx];
+            self.idx += 1;
+            return t;
         }
     };
 }
 
 comptime {
-    @import("std").testing.refAllDecls(gen);
+    std.testing.refAllDecls(gen);
+    std.testing.refAllDecls(exec);
+    std.testing.refAllDecls(parse);
 }
 
-test {
+test "parser abstraction - expression" {
     const P = Parser(enum {
         int,
         ident,
@@ -76,19 +94,8 @@ test {
         },
     });
 
-    const T = struct {
-        toks: [:.sentinel]const P.Terminal,
-        idx: usize = 0,
-
-        pub fn next(self: *@This()) P.Terminal {
-            const t = self.toks[self.idx];
-            self.idx += 1;
-            return t;
-        }
-    };
-
-    var toks = T{ .toks = &.{ .ident, .times, .int, .plus, .int } };
-    const tree = try P.parse(std.testing.allocator, &toks);
+    var toks = TestTokenizer(P.Terminal){ .toks = &.{ .ident, .times, .int, .plus, .int } };
+    const tree = try P.parseToTree(std.testing.allocator, &toks);
     defer tree.deinit(std.testing.allocator);
 
     try std.testing.expect(tree.eql(P.ParseTree{
@@ -111,6 +118,44 @@ test {
                 .{ .nt = .{ .nt = .value, .children = &.{
                     .{ .t = .int },
                 } } },
+            } } },
+        } },
+    }));
+}
+
+test "parser abstraction - non-separated list" {
+    const P = Parser(enum {
+        x,
+        sentinel,
+    }, .{
+        // start = seq $
+        .start = &.{
+            &.{ .{ .nt = .seq }, .{ .t = .sentinel } },
+        },
+        // seq = seq atom | atom
+        .seq = &.{
+            &.{ .{ .nt = .seq }, .{ .nt = .atom } },
+            &.{.{ .nt = .atom }},
+        },
+        // atom = .x
+        .atom = &.{
+            &.{.{ .t = .x }},
+        },
+    });
+
+    var toks = TestTokenizer(P.Terminal){ .toks = &.{ .x, .x } };
+    const tree = try P.parseToTree(std.testing.allocator, &toks);
+    defer tree.deinit(std.testing.allocator);
+
+    try std.testing.expect(tree.eql(P.ParseTree{
+        .nt = .{ .nt = .seq, .children = &.{
+            .{ .nt = .{ .nt = .seq, .children = &.{
+                .{ .nt = .{ .nt = .atom, .children = &.{
+                    .{ .t = .x },
+                } } },
+            } } },
+            .{ .nt = .{ .nt = .atom, .children = &.{
+                .{ .t = .x },
             } } },
         } },
     }));
