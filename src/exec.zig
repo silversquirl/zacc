@@ -43,7 +43,7 @@ pub fn Executor(
 
                         var children: [max_pop]Result = undefined;
                         const pop_idx = stack.items.len - count;
-                        for (stack.items[pop_idx..]) |entry, j| {
+                        for (stack.items[pop_idx..], 0..) |entry, j| {
                             children[j] = entry[1];
                         }
                         stack.shrinkRetainingCapacity(pop_idx);
@@ -132,7 +132,7 @@ pub fn Executor(
                 if (@as(std.meta.Tag(ParseTree), self) != other) return false;
                 switch (self) {
                     .nt => |nt| {
-                        for (nt.children) |t, i| {
+                        for (nt.children, 0..) |t, i| {
                             if (!t.eql(other.nt.children[i])) {
                                 return false;
                             }

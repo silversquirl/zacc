@@ -125,7 +125,7 @@ pub fn Generator(
                 done = true;
                 for (std.enums.values(NonTerminal)) |lhs| {
                     for (self.rules.get(lhs)) |rhs| {
-                        for (rhs) |sym, i| {
+                        for (rhs, 0..) |sym, i| {
                             if (sym == .t) continue;
                             const set = self.follow.getPtr(sym.nt);
 
@@ -182,7 +182,7 @@ pub fn Generator(
 
                     // Generate new item set from locus
                     var new_iset = self.makeItemSet(iset, locus);
-                    const idx = for (self.item_sets) |old_iset, j| {
+                    const idx = for (self.item_sets, 0..) |old_iset, j| {
                         if (old_iset.eql(new_iset)) {
                             break j;
                         }
@@ -247,7 +247,7 @@ pub fn Generator(
                     .nt => |nt| self.first.get(nt),
                 };
 
-                for (self.rules.get(locus)) |_, j| {
+                for (self.rules.get(locus), 0..) |_, j| {
                     const new_item = Item{
                         .nt = locus,
                         .rule = @intCast(u32, j),
@@ -263,7 +263,7 @@ pub fn Generator(
             var action_table: [self.item_sets.len]Tables.ActionMap = undefined;
             var goto_table: [self.item_sets.len]Tables.GotoMap = undefined;
 
-            for (self.transitions) |trans, state_id| {
+            for (self.transitions, 0..) |trans, state_id| {
                 // GOTO table
                 var goto = std.enums.EnumArray(NonTerminal, u32).initFill(std.math.maxInt(u32));
                 {
