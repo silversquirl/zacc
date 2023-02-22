@@ -7,30 +7,43 @@ pub fn Executor(
     comptime tables: zlr.ParseTables(Terminal, NonTerminal),
 ) type {
     return struct {
-        pub fn parseWithContext(
-            allocator: std.mem.Allocator, // TODO: use recursion instead?
+        pub fn parse(
+            allocator: std.mem.Allocator,
+            tokenizer: anytype,
+            context: anytype,
+        ) !@TypeOf(context).Result {
+            return parseInternal(false, allocator, tokenizer, context);
+        }
+
+        pub fn parseComptime(
+            comptime tokenizer: anytype,
+            context: anytype,
+        ) !@TypeOf(context).Result {
+            comptime {
+                return parseInternal(true, undefined, tokenizer, context);
+            }
+        }
+
+        fn parseInternal(
+            comptime ct: bool,
+            allocator: std.mem.Allocator,
             tokenizer: anytype,
             context: anytype,
         ) !@TypeOf(context).Result {
             const Result = @TypeOf(context).Result;
 
-            var stack = std.ArrayList(struct { u32, Result }).init(allocator);
-            defer {
-                for (stack.items[1..]) |entry| {
-                    entry[1].deinit(allocator);
-                }
-                stack.deinit();
-            }
-            try stack.append(.{ 0, undefined });
+            var stack = Stack(ct, struct { u32, Result }).init(allocator);
+            defer stack.deinit();
+            try stack.push(.{ 0, undefined });
 
             var tok: Terminal = tokenizer.next(); // TODO: allow errors (eg. file read)
 
             while (true) {
-                const state = stack.getLast()[0];
+                const state = stack.top()[0];
                 const action = tables.action[state].get(tok);
                 switch (action) {
                     .shift => |next_state| {
-                        try stack.append(.{
+                        try stack.push(.{
                             next_state,
                             try context.terminal(tok),
                         });
@@ -42,18 +55,16 @@ pub fn Executor(
                         const nt = reduce[1];
 
                         var children: [max_pop]Result = undefined;
-                        const pop_idx = stack.items.len - count;
-                        for (stack.items[pop_idx..], 0..) |entry, j| {
+                        for (stack.popMany(count), 0..) |entry, j| {
                             children[j] = entry[1];
                         }
-                        stack.shrinkRetainingCapacity(pop_idx);
 
-                        const prior_state = stack.getLast()[0];
+                        const prior_state = stack.top()[0];
                         const next_state = tables.goto[prior_state].get(nt);
                         if (next_state == std.math.maxInt(u32)) {
                             return error.ParseSyntaxError;
                         }
-                        try stack.append(.{
+                        try stack.push(.{
                             next_state,
                             try context.nonTerminal(nt, @as([]const Result, children[0..count])),
                         });
@@ -77,11 +88,76 @@ pub fn Executor(
             break :blk max;
         };
 
+        fn Stack(comptime ct: bool, comptime T: type) type {
+            return if (ct) struct {
+                array: []T,
+
+                pub inline fn init(_: std.mem.Allocator) @This() {
+                    return .{ .array = &.{} };
+                }
+                pub inline fn deinit(_: @This()) void {}
+
+                pub inline fn push(comptime self: *@This(), item: T) !void {
+                    var a = (self.array ++ .{item}).*;
+                    self.array = &a;
+                }
+
+                pub inline fn top(comptime self: @This()) T {
+                    return self.array[self.array.len - 1];
+                }
+
+                pub inline fn pop(comptime self: *@This()) T {
+                    return self.popMany(1)[0];
+                }
+
+                // The returned array is invalidated as soon as the stack is pushed to
+                pub inline fn popMany(comptime self: *@This(), count: usize) []T {
+                    const pop_idx = self.array.len - count;
+                    const a = self.array[pop_idx..];
+                    self.array = self.array[0..pop_idx];
+                    return a;
+                }
+            } else struct {
+                array: std.ArrayList(T),
+
+                pub inline fn init(allocator: std.mem.Allocator) @This() {
+                    return .{ .array = std.ArrayList(T).init(allocator) };
+                }
+
+                pub inline fn deinit(self: *@This()) void {
+                    for (self.array.items[1..]) |entry| {
+                        entry[1].deinit(self.array.allocator);
+                    }
+                    self.array.deinit();
+                }
+
+                pub inline fn push(self: *@This(), item: T) !void {
+                    try self.array.append(item);
+                }
+
+                pub inline fn top(self: @This()) T {
+                    return self.array.getLast();
+                }
+
+                pub inline fn pop(self: *@This()) T {
+                    return self.array.pop();
+                }
+
+                // The returned array is invalidated as soon as the stack is pushed to
+                pub inline fn popMany(self: *@This(), count: usize) []T {
+                    const pop_idx = self.array.items.len - count;
+                    const a = self.array.items[pop_idx..];
+                    self.array.shrinkRetainingCapacity(pop_idx);
+                    return a;
+                }
+            };
+        }
+
         pub fn parseToTree(
             allocator: std.mem.Allocator,
             tokenizer: anytype,
         ) !ParseTree {
-            return parseWithContext(
+            return parse(
                 allocator,
                 tokenizer,
                 ParseTreeContext{ .allocator = allocator },
@@ -103,6 +179,32 @@ pub fn Executor(
                 } };
             }
             pub fn terminal(_: ParseTreeContext, t: Terminal) !ParseTree {
+                return .{ .t = t };
+            }
+        };
+
+        pub fn parseToTreeComptime(
+            comptime tokenizer: anytype,
+        ) !ParseTree {
+            return parseComptime(
+                tokenizer,
+                ParseTreeComptimeContext{},
+            );
+        }
+        const ParseTreeComptimeContext = struct {
+            pub const Result = ParseTree;
+
+            pub fn nonTerminal(
+                _: ParseTreeComptimeContext,
+                nt: NonTerminal,
+                comptime children: []const ParseTree,
+            ) !ParseTree {
+                return .{ .nt = .{
+                    .nt = nt,
+                    .children = children ++ .{},
+                } };
+            }
+            pub fn terminal(_: ParseTreeComptimeContext, t: Terminal) !ParseTree {
                 return .{ .t = t };
             }
         };

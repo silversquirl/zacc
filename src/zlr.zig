@@ -39,8 +39,10 @@ pub fn Parser(comptime Term: type, comptime grammar: anytype) type {
 
         pub const ParseTree = Exec.ParseTree;
 
+        pub const parse = Exec.parse;
+        pub const parseComptime = Exec.parseComptime;
         pub const parseToTree = Exec.parseToTree;
-        pub const parseWithContext = Exec.parseWithContext;
+        pub const parseToTreeComptime = Exec.parseToTreeComptime;
     };
 }
 
@@ -157,6 +159,41 @@ test "parser abstraction - non-separated list" {
             .{ .nt = .{ .nt = .atom, .children = &.{
                 .{ .t = .x },
             } } },
+        } },
+    }));
+}
+
+test "parser abstraction - comptime" {
+    const P = Parser(enum {
+        item,
+        sep,
+        sentinel,
+    }, .{
+        // start = seq $
+        .start = &.{
+            &.{ .{ .nt = .seq }, .{ .t = .sentinel } },
+        },
+        // seq = seq .sep .item | .item
+        .seq = &.{
+            &.{ .{ .nt = .seq }, .{ .t = .sep }, .{ .t = .item } },
+            &.{.{ .t = .item }},
+        },
+    });
+
+    comptime var toks = TestTokenizer(P.Terminal){ .toks = &.{ .item, .sep, .item, .sep, .item } };
+    const tree = comptime try P.parseToTreeComptime(&toks);
+
+    try std.testing.expect(tree.eql(P.ParseTree{
+        .nt = .{ .nt = .seq, .children = &.{
+            .{ .nt = .{ .nt = .seq, .children = &.{
+                .{ .nt = .{ .nt = .seq, .children = &.{
+                    .{ .t = .item },
+                } } },
+                .{ .t = .sep },
+                .{ .t = .item },
+            } } },
+            .{ .t = .sep },
+            .{ .t = .item },
         } },
     }));
 }
