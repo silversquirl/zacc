@@ -1,6 +1,6 @@
 // Parser for the grammar language
 const std = @import("std");
-const zlr = @import("zlr.zig");
+const zacc = @import("zacc.zig");
 
 const Token = enum {
     ident, // Identifier
@@ -164,8 +164,8 @@ const grammar = .{
     },
 };
 const NonTerm = std.meta.FieldEnum(@TypeOf(grammar));
-const tables = zlr.gen.Generator(Token, NonTerm).generate(grammar);
-const Exec = zlr.exec.Executor(Token, NonTerm, tables);
+const tables = zacc.gen.Generator(Token, NonTerm).generate(grammar);
+const Exec = zacc.exec.Executor(Token, NonTerm, tables);
 
 pub fn Parse(comptime Terminal: type, comptime src: []const u8) type {
     const ir = parseToIr(src);
@@ -188,12 +188,12 @@ pub fn Parse(comptime Terminal: type, comptime src: []const u8) type {
 
         pub const Grammar = std.enums.EnumFieldStruct(
             NonTerminal,
-            []const []const zlr.gen.Symbol(Terminal, NonTerminal),
+            []const []const zacc.gen.Symbol(Terminal, NonTerminal),
             null,
         );
 
         pub const grammar = blk: {
-            const Symbol = zlr.gen.Symbol(Terminal, NonTerminal);
+            const Symbol = zacc.gen.Symbol(Terminal, NonTerminal);
 
             var g: Grammar = undefined;
             for (ir) |rule| {

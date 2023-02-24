@@ -1,10 +1,10 @@
 const std = @import("std");
-const zlr = @import("zlr.zig");
+const zacc = @import("zacc.zig");
 
 pub fn Executor(
     comptime Terminal: type,
     comptime NonTerminal: type,
-    comptime tables: zlr.ParseTables(Terminal, NonTerminal),
+    comptime tables: zacc.ParseTables(Terminal, NonTerminal),
 ) type {
     return struct {
         pub fn parse(

@@ -5,12 +5,12 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     b.addModule(.{
-        .name = "zlr",
-        .source_file = .{ .path = "src/zlr.zig" },
+        .name = "zacc",
+        .source_file = .{ .path = "src/zacc.zig" },
     });
 
     const tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/zlr.zig" },
+        .root_source_file = .{ .path = "src/zacc.zig" },
         .target = target,
         .optimize = optimize,
     });
