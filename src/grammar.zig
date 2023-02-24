@@ -231,44 +231,6 @@ fn parseToIr(comptime src: []const u8) []const IrRule {
                 unused,
             };
 
-            fn childrenEql(as: []const Result, bs: []const Result) bool {
-                if (as.len != bs.len) return false;
-                for (as, bs) |a, b| {
-                    if (@as(std.meta.Tag(Result), a) != b) return false;
-                    const eql = switch (a) {
-                        .rules => for (a.rules, b.rules) |ar, br| {
-                            if (!ruleEql(ar, br)) break false;
-                        } else true,
-                        .rule => ruleEql(a.rule, b.rule),
-                        .alts => altsEql(a.alts, b.alts),
-                        .pat => patEql(a.pat, b.pat),
-                        .atom => atomEql(a.atom, b.atom),
-                        .ident => std.mem.eql(u8, a.ident, b.ident),
-                        .unused => true,
-                    };
-                    if (!eql) return false;
-                }
-                return true;
-            }
-            fn ruleEql(a: IrRule, b: IrRule) bool {
-                return std.mem.eql(u8, a.name, b.name) and altsEql(a.alts, b.alts);
-            }
-            fn altsEql(as: []const []const IrRule.Atom, bs: []const []const IrRule.Atom) bool {
-                for (as, bs) |a, b| {
-                    if (!patEql(a, b)) return false;
-                }
-                return true;
-            }
-            fn patEql(as: []const IrRule.Atom, bs: []const IrRule.Atom) bool {
-                for (as, bs) |a, b| {
-                    if (!atomEql(a, b)) return false;
-                }
-                return true;
-            }
-            fn atomEql(a: IrRule.Atom, b: IrRule.Atom) bool {
-                return a.kind == b.kind and std.mem.eql(u8, a.name, b.name);
-            }
-
             pub fn nonTerminal(
                 comptime _: Context,
                 comptime nt: NonTerm,
