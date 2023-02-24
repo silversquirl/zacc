@@ -2,6 +2,11 @@
 
 Zacc is a parser generator for Zig. It uses LR(1) for linear-time bottom-up parsing, will parse into any AST you can dream up, and works at both comptime and runtime!
 
+## Status
+
+Parsing works great, but error reporting is a work in progress.
+Grammar syntax could do with some ergonomic improvements for things like repetitions, optionals, etc.
+
 ## Usage
 
 Zacc can be added as a dependency through the Zig package manager.
