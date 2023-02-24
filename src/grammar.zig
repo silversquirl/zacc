@@ -27,6 +27,8 @@ const Tokenizer = struct {
             ident,
             char,
             backslash,
+            comment0,
+            comment1,
         };
 
         var state = State.start;
@@ -52,6 +54,8 @@ const Tokenizer = struct {
                         '=' => return .@"=",
                         '|' => return .@"|",
 
+                        '/' => .comment0,
+
                         else => return .invalid,
                     };
                 },
@@ -70,12 +74,23 @@ const Tokenizer = struct {
                     else => {},
                 },
                 .backslash => {},
+
+                .comment0 => if (c == '/') {
+                    state = .comment1;
+                } else {
+                    self.idx -= 1;
+                    return .invalid;
+                },
+                .comment1 => if (c == '\n') {
+                    self.start = self.idx;
+                    state = .start;
+                },
             }
         }
         return switch (state) {
-            .start => .sentinel,
+            .start, .comment1 => .sentinel,
             .ident => .ident,
-            .char, .backslash => .invalid,
+            .char, .backslash, .comment0 => .invalid,
         };
     }
 
