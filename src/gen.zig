@@ -21,12 +21,9 @@ pub fn Generator(
         const Self = @This();
 
         pub const Tables = zlr.ParseTables(Terminal, NonTerminal);
-        pub const Rules = std.enums.EnumFieldStruct(NonTerminal, []const []const Symbol, null);
-        const RulesArray = std.enums.EnumArray(NonTerminal, []const []const Symbol);
-        pub const Symbol = union(enum) {
-            t: Terminal,
-            nt: NonTerminal,
-        };
+        pub const Rules = std.enums.EnumFieldStruct(NonTerminal, []const []const Sym, null);
+        const RulesArray = std.enums.EnumArray(NonTerminal, []const []const Sym);
+        const Sym = Symbol(Terminal, NonTerminal);
 
         rules: RulesArray,
         first: TermTable = TermTable.initFill(TermSet.initEmpty()),
@@ -205,7 +202,7 @@ pub fn Generator(
             }
         }
 
-        fn makeItemSet(self: Self, comptime seed_iset: ItemSet, comptime seed_locus: Symbol) ItemSet {
+        fn makeItemSet(self: Self, comptime seed_iset: ItemSet, comptime seed_locus: Sym) ItemSet {
             var iset = ItemSet{};
 
             for (seed_iset.items) |item| {
@@ -319,6 +316,13 @@ pub fn Generator(
                 .goto = &goto_table,
             };
         }
+    };
+}
+
+pub fn Symbol(comptime Terminal: type, comptime NonTerminal: type) type {
+    return union(enum) {
+        t: Terminal,
+        nt: NonTerminal,
     };
 }
 
