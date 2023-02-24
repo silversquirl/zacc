@@ -44,4 +44,4 @@ Your context type should have the following decls:
 The `terminal` callback will be called when a non-terminal symbol is parsed, and will be passed in the corresponding token.
 The `nonTerminal` callback will be called when a non-terminal symbol has been parsed, and is passed the symbol name as an enum value, as well as the children of the symbol, in the same order as defined in the grammar.
 
-For an example that uses Zacc to parse basic arithmetic expressions, see `examples/arithmetic.zig`
+For an example that uses Zacc to parse basic arithmetic expressions, see `example/arithmetic.zig`

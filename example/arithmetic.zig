@@ -6,7 +6,7 @@ const Token = enum {
     number,
 
     // Single-character tokens can be written using character syntax in Zacc
-    // grammars, so we use Zig's quoted literal syntax to define these oeprators.
+    // grammars, so we use Zig's quoted identifier syntax to define these operators.
     @"+",
     @"-",
     @"*",
@@ -32,6 +32,10 @@ const Parser = zacc.Parser(Token,
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+
+    // TestTokenizer is a simple tokenizer provided by zacc for use in tests.
+    // It simply yields the list of tokens it is given, followed by a sentinel.
     var toks = zacc.TestTokenizer(Token){ .toks = &.{
         .number,
         .@"+",
@@ -45,7 +49,9 @@ pub fn main() !void {
         .@"/",
         .number,
     } };
+
     const tree = try Parser.parseToTree(arena.allocator(), &toks);
+    defer tree.deinit(arena.allocator());
     try std.io.getStdOut().writer().print("{}\n", .{tree.fmtDot()});
 }
 

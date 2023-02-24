@@ -54,6 +54,7 @@ pub fn Executor(
                         const count = reduce[0];
                         const nt = reduce[1];
 
+                        // TODO: SoA so we can avoid copy
                         var children: [max_pop]Result = undefined;
                         for (stack.popMany(count), 0..) |entry, j| {
                             children[j] = entry[1];
