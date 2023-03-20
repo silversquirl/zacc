@@ -1,8 +1,7 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    b.addModule(.{
-        .name = "zacc",
+    const zacc = b.addModule("zacc", .{
         .source_file = .{ .path = "src/zacc.zig" },
     });
 
@@ -15,6 +14,6 @@ pub fn build(b: *std.Build) void {
         .name = "arithmetic",
         .root_source_file = .{ .path = "example/arithmetic.zig" },
     });
-    exe.addModule("zacc", b.modules.get("zacc").?);
+    exe.addModule("zacc", zacc);
     b.step("run", "Run the arithmetic example").dependOn(&exe.run().step);
 }
