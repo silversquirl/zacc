@@ -9,13 +9,13 @@ pub fn Generator(
         pub fn generate(comptime rules: Rules) Tables {
             @setEvalBranchQuota(2000 * std.meta.fields(Rules).len);
 
-            comptime {
+            return comptime a: {
                 var gen = Self{ .rules = RulesArray.init(rules) };
                 gen.fillFirst();
                 gen.fillFollow();
                 gen.genItemSets();
-                return gen.genTables();
-            }
+                break :a gen.genTables();
+            };
         }
 
         const Self = @This();

@@ -15,5 +15,5 @@ pub fn build(b: *std.Build) void {
         .root_source_file = .{ .path = "example/arithmetic.zig" },
     });
     exe.addModule("zacc", zacc);
-    b.step("run", "Run the arithmetic example").dependOn(&exe.run().step);
+    b.step("run", "Run the arithmetic example").dependOn(&b.addRunArtifact(exe).step);
 }
